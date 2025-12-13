@@ -113,5 +113,21 @@ if [ $PERCENTAGE -gt 100 ]; then
     COMPRESSED=" (Compressed)"
 fi
 
+# ccusage로 이번 달 비용 가져오기
+COST_INFO=""
+if command -v ccusage &> /dev/null; then
+    # 현재 년-월 가져오기
+    CURRENT_MONTH=$(date +"%Y-%m")
+
+    # ccusage 실행하고 이번 달 비용 추출
+    MONTHLY_COST=$(ccusage monthly -j 2>/dev/null | jq -r --arg month "$CURRENT_MONTH" '.monthly[] | select(.month == $month) | .totalCost // 0')
+
+    if [ -n "$MONTHLY_COST" ] && [ "$MONTHLY_COST" != "null" ] && [ "$MONTHLY_COST" != "0" ]; then
+        # 소수점 2자리로 포맷
+        FORMATTED_COST=$(printf "%.2f" "$MONTHLY_COST")
+        COST_INFO=" | 💰 \$${FORMATTED_COST}"
+    fi
+fi
+
 # 출력
-echo -e "${COLOR}Context: ${BAR} ${PERCENTAGE}%${COMPRESSED} | Remaining: ${REMAINING_K}K${RESET}"
+echo -e "${COLOR}Context: ${BAR} ${PERCENTAGE}%${COMPRESSED} | Remaining: ${REMAINING_K}K${COST_INFO}${RESET}"
