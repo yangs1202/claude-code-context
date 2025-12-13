@@ -26,26 +26,13 @@ else
     BASELINE_OUTPUT=0
 fi
 
-# 세션이 변경되었을 때 처리
+# 세션이 변경되었을 때 처리 - 무조건 baseline 리셋
 if [ "$CURRENT_SESSION" != "$PREV_SESSION" ] && [ -n "$CURRENT_SESSION" ]; then
-    # 이전 토큰 총합 계산
-    PREV_TOTAL=$((BASELINE_INPUT + BASELINE_OUTPUT))
-    CURRENT_TOTAL=$((INPUT_TOKENS + OUTPUT_TOKENS))
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ 세션 변경 감지 - baseline 리셋" >> "$LOG_FILE"
+    BASELINE_INPUT=$INPUT_TOKENS
+    BASELINE_OUTPUT=$OUTPUT_TOKENS
 
-    # 토큰이 50% 이상 감소했으면 진짜 clear로 판단
-    THRESHOLD=$((PREV_TOTAL / 2))
-
-    if [ $CURRENT_TOTAL -lt $THRESHOLD ] || [ $PREV_TOTAL -eq 0 ]; then
-        # 진짜 clear: baseline 리셋
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ 세션 변경 감지 (진짜 clear) - 이전: $PREV_TOTAL, 현재: $CURRENT_TOTAL" >> "$LOG_FILE"
-        BASELINE_INPUT=$INPUT_TOKENS
-        BASELINE_OUTPUT=$OUTPUT_TOKENS
-    else
-        # session_id만 변경됨: baseline 유지하고 session_id만 업데이트
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️  세션 ID만 변경됨 (baseline 유지) - 이전: $PREV_TOTAL, 현재: $CURRENT_TOTAL" >> "$LOG_FILE"
-    fi
-
-    # 상태 저장 (session_id는 항상 업데이트)
+    # 상태 저장
     echo "{\"session_id\":\"$CURRENT_SESSION\",\"baseline_input\":$BASELINE_INPUT,\"baseline_output\":$BASELINE_OUTPUT}" > "$STATE_FILE"
 fi
 
