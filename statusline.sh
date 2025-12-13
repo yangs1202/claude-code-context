@@ -113,8 +113,11 @@ if [ $PERCENTAGE -gt 100 ]; then
     COMPRESSED=" (Compressed)"
 fi
 
-# ccusage로 이번 달 비용 가져오기
-COST_INFO=""
+# 버짓 설정 파일 경로
+BUDGET_CONFIG="$HOME/.claude/budget-config.json"
+
+# ccusage로 이번 달 비용 가져오기 및 버짓 퍼센트 계산
+BUDGET_INFO=""
 if command -v ccusage &> /dev/null; then
     # 현재 년-월 가져오기
     CURRENT_MONTH=$(date +"%Y-%m")
@@ -123,11 +126,73 @@ if command -v ccusage &> /dev/null; then
     MONTHLY_COST=$(ccusage monthly -j 2>/dev/null | jq -r --arg month "$CURRENT_MONTH" '.monthly[] | select(.month == $month) | .totalCost // 0')
 
     if [ -n "$MONTHLY_COST" ] && [ "$MONTHLY_COST" != "null" ] && [ "$MONTHLY_COST" != "0" ]; then
-        # 소수점 2자리로 포맷
         FORMATTED_COST=$(printf "%.2f" "$MONTHLY_COST")
-        COST_INFO=" | 💰 \$${FORMATTED_COST}"
+
+        # 버짓 설정이 있으면 퍼센트 바 표시
+        if [ -f "$BUDGET_CONFIG" ]; then
+            MONTHLY_BUDGET=$(jq -r '.monthly_budget // 0' "$BUDGET_CONFIG")
+
+            if [ "$MONTHLY_BUDGET" != "0" ] && [ "$MONTHLY_BUDGET" != "null" ]; then
+                # 플랜 타입 확인
+                PLAN_TYPE=$(jq -r '.plan_type // "api"' "$BUDGET_CONFIG")
+
+                # 사용률 계산
+                USAGE_PERCENT=$(awk "BEGIN {
+                    used = $MONTHLY_COST;
+                    budget = $MONTHLY_BUDGET;
+                    usage = used / budget * 100;
+                    printf \"%.0f\", usage
+                }")
+
+                # 플랜 타입에 따라 색상 로직 분기
+                if [ "$PLAN_TYPE" = "api" ]; then
+                    # API Billing: 남은 버짓 기준 (적게 쓸수록 초록)
+                    if [ "$USAGE_PERCENT" -ge 100 ]; then
+                        BUDGET_COLOR=$RED
+                    elif [ "$USAGE_PERCENT" -ge 75 ]; then
+                        BUDGET_COLOR=$YELLOW
+                    else
+                        BUDGET_COLOR=$GREEN
+                    fi
+                    # 바는 남은 버짓 표시
+                    BAR_PERCENT=$((100 - USAGE_PERCENT))
+                    if [ $BAR_PERCENT -lt 0 ]; then BAR_PERCENT=0; fi
+                else
+                    # Pro/Max 구독: 사용량 기준 (많이 쓸수록 초록 = 뽕뽑기)
+                    if [ "$USAGE_PERCENT" -ge 100 ]; then
+                        BUDGET_COLOR=$GREEN
+                    elif [ "$USAGE_PERCENT" -ge 50 ]; then
+                        BUDGET_COLOR=$YELLOW
+                    else
+                        BUDGET_COLOR=$RED
+                    fi
+                    # 바는 사용량 표시
+                    BAR_PERCENT=$USAGE_PERCENT
+                    if [ $BAR_PERCENT -gt 100 ]; then BAR_PERCENT=100; fi
+                fi
+
+                # 버짓 바 생성 (10칸)
+                BUDGET_BAR_LEN=10
+                BUDGET_FILLED=$((BAR_PERCENT * BUDGET_BAR_LEN / 100))
+                BUDGET_BAR="["
+                for ((i=0; i<$BUDGET_BAR_LEN; i++)); do
+                    if [ $i -lt $BUDGET_FILLED ]; then
+                        BUDGET_BAR+="█"
+                    else
+                        BUDGET_BAR+="░"
+                    fi
+                done
+                BUDGET_BAR+="]"
+
+                BUDGET_INFO=" | ${BUDGET_COLOR}💰 ${BUDGET_BAR} \$${FORMATTED_COST}/\$${MONTHLY_BUDGET}${RESET}"
+            else
+                BUDGET_INFO=" | 💰 \$${FORMATTED_COST}"
+            fi
+        else
+            BUDGET_INFO=" | 💰 \$${FORMATTED_COST}"
+        fi
     fi
 fi
 
 # 출력
-echo -e "${COLOR}Context: ${BAR} ${PERCENTAGE}%${COMPRESSED} | Remaining: ${REMAINING_K}K${COST_INFO}${RESET}"
+echo -e "${COLOR}Context: ${BAR} ${PERCENTAGE}%${COMPRESSED} | Remaining: ${REMAINING_K}K${RESET}${BUDGET_INFO}"

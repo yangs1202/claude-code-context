@@ -33,8 +33,50 @@ fi
 echo -e "${GREEN}✓ 모든 의존성이 설치되어 있습니다.${NC}"
 echo ""
 
+# 플랜 및 버짓 설정
+echo "2. 월별 버짓 설정..."
+echo ""
+echo "사용 중인 플랜을 선택하세요:"
+echo "  1) API Billing (직접 버짓 입력)"
+echo "  2) Claude Pro (\$20/월)"
+echo "  3) Claude Max 5x (\$100/월)"
+echo "  4) Claude Max 20x (\$200/월)"
+echo ""
+read -p "선택 (1-4): " PLAN_CHOICE
+
+case $PLAN_CHOICE in
+    1)
+        PLAN_TYPE="api"
+        read -p "월별 최대 버짓 (달러, 예: 50): " BUDGET_AMOUNT
+        if ! [[ "$BUDGET_AMOUNT" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+            echo -e "${RED}❌ 오류: 숫자를 입력하세요.${NC}"
+            exit 1
+        fi
+        ;;
+    2)
+        PLAN_TYPE="pro"
+        BUDGET_AMOUNT=20
+        ;;
+    3)
+        PLAN_TYPE="max_5x"
+        BUDGET_AMOUNT=100
+        ;;
+    4)
+        PLAN_TYPE="max_20x"
+        BUDGET_AMOUNT=200
+        ;;
+    *)
+        echo -e "${YELLOW}⚠ 잘못된 선택입니다. 기본값(API \$100)으로 설정합니다.${NC}"
+        PLAN_TYPE="api"
+        BUDGET_AMOUNT=100
+        ;;
+esac
+
+echo -e "${GREEN}✓ 플랜: $PLAN_TYPE, 버짓: \$${BUDGET_AMOUNT}/월${NC}"
+echo ""
+
 # Claude 디렉토리 확인 및 생성
-echo "2. Claude Code 디렉토리 확인 중..."
+echo "3. Claude Code 디렉토리 확인 중..."
 CLAUDE_DIR="$HOME/.claude"
 
 if [ ! -d "$CLAUDE_DIR" ]; then
@@ -46,14 +88,26 @@ echo -e "${GREEN}✓ 디렉토리 확인 완료${NC}"
 echo ""
 
 # statusline.sh 복사
-echo "3. statusline.sh 설치 중..."
+echo "4. statusline.sh 설치 중..."
 cp statusline.sh "$CLAUDE_DIR/statusline.sh"
 chmod +x "$CLAUDE_DIR/statusline.sh"
 echo -e "${GREEN}✓ $CLAUDE_DIR/statusline.sh 설치 완료${NC}"
 echo ""
 
+# budget-config.json 저장
+echo "5. 버짓 설정 저장 중..."
+BUDGET_CONFIG_FILE="$CLAUDE_DIR/budget-config.json"
+cat > "$BUDGET_CONFIG_FILE" << EOF
+{
+  "plan_type": "$PLAN_TYPE",
+  "monthly_budget": $BUDGET_AMOUNT
+}
+EOF
+echo -e "${GREEN}✓ $BUDGET_CONFIG_FILE 저장 완료${NC}"
+echo ""
+
 # settings.json 업데이트
-echo "4. settings.json 설정 중..."
+echo "6. settings.json 설정 중..."
 SETTINGS_FILE="$CLAUDE_DIR/settings.json"
 
 if [ ! -f "$SETTINGS_FILE" ]; then
