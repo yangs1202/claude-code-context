@@ -15,13 +15,11 @@ INPUT_TOKENS=$(echo "$input" | jq -r '.context_window.total_input_tokens // 0')
 OUTPUT_TOKENS=$(echo "$input" | jq -r '.context_window.total_output_tokens // 0')
 CONTEXT_SIZE=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
 
-# 현재 모델 추출 (예: claude-sonnet-4-20250514 -> sonnet-4)
-RAW_MODEL=$(echo "$input" | jq -r '.model // ""')
-if [ -n "$RAW_MODEL" ] && [ "$RAW_MODEL" != "null" ]; then
-    # 모델명 간소화: claude-opus-4-5-20251101 -> opus-4-5, claude-sonnet-4-20250514 -> sonnet-4
-    MODEL_NAME=$(echo "$RAW_MODEL" | sed -E 's/claude-([a-z]+(-[0-9]+)+)-[0-9]+/\1/; s/claude-([a-z]+-[0-9]+)-[0-9]+/\1/')
-else
-    MODEL_NAME=""
+# 현재 모델 추출 - settings.json에서 읽기
+MODEL_NAME=""
+CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+if [ -f "$CLAUDE_SETTINGS" ]; then
+    MODEL_NAME=$(jq -r '.model // ""' "$CLAUDE_SETTINGS" 2>/dev/null)
 fi
 
 # 이전 세션 정보 읽기
@@ -203,10 +201,13 @@ if command -v ccusage &> /dev/null; then
     fi
 fi
 
-# 모델 정보 포맷팅
+# 모델 정보 포맷팅 - JSON 문자열이 아닌 경우에만 표시
 MODEL_INFO=""
-if [ -n "$MODEL_NAME" ]; then
-    MODEL_INFO=" | 🤖 ${MODEL_NAME}"
+if [ -n "$MODEL_NAME" ] && [ "$MODEL_NAME" != "null" ]; then
+    # JSON 형식인지 확인 ('{' 포함 여부)
+    if [[ "$MODEL_NAME" != *"{"* ]]; then
+        MODEL_INFO=" | 🤖 $MODEL_NAME"
+    fi
 fi
 
 # 출력
