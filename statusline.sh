@@ -15,6 +15,15 @@ INPUT_TOKENS=$(echo "$input" | jq -r '.context_window.total_input_tokens // 0')
 OUTPUT_TOKENS=$(echo "$input" | jq -r '.context_window.total_output_tokens // 0')
 CONTEXT_SIZE=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
 
+# 현재 모델 추출 (예: claude-sonnet-4-20250514 -> sonnet-4)
+RAW_MODEL=$(echo "$input" | jq -r '.model // ""')
+if [ -n "$RAW_MODEL" ] && [ "$RAW_MODEL" != "null" ]; then
+    # 모델명 간소화: claude-opus-4-5-20251101 -> opus-4-5, claude-sonnet-4-20250514 -> sonnet-4
+    MODEL_NAME=$(echo "$RAW_MODEL" | sed -E 's/claude-([a-z]+(-[0-9]+)+)-[0-9]+/\1/; s/claude-([a-z]+-[0-9]+)-[0-9]+/\1/')
+else
+    MODEL_NAME=""
+fi
+
 # 이전 세션 정보 읽기
 if [ -f "$STATE_FILE" ]; then
     PREV_SESSION=$(jq -r '.session_id // ""' "$STATE_FILE")
@@ -194,5 +203,11 @@ if command -v ccusage &> /dev/null; then
     fi
 fi
 
+# 모델 정보 포맷팅
+MODEL_INFO=""
+if [ -n "$MODEL_NAME" ]; then
+    MODEL_INFO=" | 🤖 ${MODEL_NAME}"
+fi
+
 # 출력
-echo -e "${COLOR}Context: ${BAR} ${PERCENTAGE}%${COMPRESSED} | Remaining: ${REMAINING_K}K${RESET}${BUDGET_INFO}"
+echo -e "${COLOR}Context: ${BAR} ${PERCENTAGE}%${COMPRESSED} | Remaining: ${REMAINING_K}K${RESET}${MODEL_INFO}${BUDGET_INFO}"
