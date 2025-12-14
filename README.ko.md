@@ -70,9 +70,10 @@ sudo yum install jq
 설치 스크립트는 자동으로:
 1. ✅ 의존성 확인 (jq, awk)
 2. ✅ `statusline.sh`를 `~/.claude/`에 설치
-3. ✅ `~/.claude/settings.json` 업데이트
-4. ✅ 기존 설정 백업 생성
-5. ✅ 실행 권한 설정
+3. ✅ 플랜 설정으로 `budget-config.json` 생성
+4. ✅ `~/.claude/settings.json` 업데이트
+5. ✅ 기존 설정 백업 생성
+6. ✅ 실행 권한 설정
 
 ## 수동 설정
 
@@ -84,7 +85,21 @@ sudo yum install jq
    chmod +x ~/.claude/statusline.sh
    ```
 
-2. `~/.claude/settings.json`에 추가:
+2. `~/.claude/budget-config.json` 생성 (버짓 추적용):
+   ```json
+   {
+     "plan_type": "api",
+     "monthly_budget": 100
+   }
+   ```
+
+   **plan_type 옵션:**
+   - `"api"` - API Billing (남은 버짓 표시)
+   - `"pro"` - Claude Pro ($20/월)
+   - `"max_5x"` - Claude Max 5x ($100/월)
+   - `"max_20x"` - Claude Max 20x ($200/월)
+
+3. `~/.claude/settings.json`에 추가:
    ```json
    {
      "statusLine": {
@@ -94,7 +109,7 @@ sudo yum install jq
    }
    ```
 
-3. Claude Code 재시작
+4. Claude Code 재시작
 
 ## 제거 방법
 

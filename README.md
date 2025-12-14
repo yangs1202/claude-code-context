@@ -70,9 +70,10 @@ sudo yum install jq
 The installer will:
 1. ✅ Check dependencies (jq, awk)
 2. ✅ Install `statusline.sh` to `~/.claude/`
-3. ✅ Update `~/.claude/settings.json`
-4. ✅ Create backup of existing settings
-5. ✅ Set proper permissions
+3. ✅ Create `budget-config.json` with your plan settings
+4. ✅ Update `~/.claude/settings.json`
+5. ✅ Create backup of existing settings
+6. ✅ Set proper permissions
 
 ## Manual Setup
 
@@ -84,7 +85,21 @@ If you prefer manual installation:
    chmod +x ~/.claude/statusline.sh
    ```
 
-2. Add to `~/.claude/settings.json`:
+2. Create `~/.claude/budget-config.json` (for budget tracking):
+   ```json
+   {
+     "plan_type": "api",
+     "monthly_budget": 100
+   }
+   ```
+
+   **plan_type options:**
+   - `"api"` - API Billing (shows remaining budget)
+   - `"pro"` - Claude Pro ($20/month)
+   - `"max_5x"` - Claude Max 5x ($100/month)
+   - `"max_20x"` - Claude Max 20x ($200/month)
+
+3. Add to `~/.claude/settings.json`:
    ```json
    {
      "statusLine": {
@@ -94,7 +109,7 @@ If you prefer manual installation:
    }
    ```
 
-3. Restart Claude Code
+4. Restart Claude Code
 
 ## Uninstallation
 
