@@ -75,8 +75,29 @@ esac
 echo -e "${GREEN}✓ 플랜: $PLAN_TYPE, 버짓: \$${BUDGET_AMOUNT}/월${NC}"
 echo ""
 
+# current_usage.json 경로 설정
+echo "3. current_usage.json 경로 설정..."
+echo ""
+echo "사용량 정보가 담긴 current_usage.json 파일 경로를 입력하세요."
+echo "  예: /home/user/usage/current_usage.json"
+echo "  (건너뛰려면 Enter)"
+echo ""
+read -p "경로: " USAGE_FILE_PATH
+
+if [ -n "$USAGE_FILE_PATH" ]; then
+    # 경로 유효성 확인
+    if [ -f "$USAGE_FILE_PATH" ]; then
+        echo -e "${GREEN}✓ 파일 확인 완료: $USAGE_FILE_PATH${NC}"
+    else
+        echo -e "${YELLOW}⚠ 파일이 아직 존재하지 않지만, 경로를 저장합니다.${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠ 경로를 입력하지 않았습니다. current_usage.json 기능을 사용하지 않습니다.${NC}"
+fi
+echo ""
+
 # Claude 디렉토리 확인 및 생성
-echo "3. Claude Code 디렉토리 확인 중..."
+echo "4. Claude Code 디렉토리 확인 중..."
 CLAUDE_DIR="$HOME/.claude"
 
 if [ ! -d "$CLAUDE_DIR" ]; then
@@ -88,26 +109,36 @@ echo -e "${GREEN}✓ 디렉토리 확인 완료${NC}"
 echo ""
 
 # statusline.sh 복사
-echo "4. statusline.sh 설치 중..."
+echo "5. statusline.sh 설치 중..."
 cp statusline.sh "$CLAUDE_DIR/statusline.sh"
 chmod +x "$CLAUDE_DIR/statusline.sh"
 echo -e "${GREEN}✓ $CLAUDE_DIR/statusline.sh 설치 완료${NC}"
 echo ""
 
 # budget-config.json 저장
-echo "5. 버짓 설정 저장 중..."
+echo "6. 버짓 설정 저장 중..."
 BUDGET_CONFIG_FILE="$CLAUDE_DIR/budget-config.json"
+if [ -n "$USAGE_FILE_PATH" ]; then
+cat > "$BUDGET_CONFIG_FILE" << EOF
+{
+  "plan_type": "$PLAN_TYPE",
+  "monthly_budget": $BUDGET_AMOUNT,
+  "usage_file": "$USAGE_FILE_PATH"
+}
+EOF
+else
 cat > "$BUDGET_CONFIG_FILE" << EOF
 {
   "plan_type": "$PLAN_TYPE",
   "monthly_budget": $BUDGET_AMOUNT
 }
 EOF
+fi
 echo -e "${GREEN}✓ $BUDGET_CONFIG_FILE 저장 완료${NC}"
 echo ""
 
 # settings.json 업데이트
-echo "6. settings.json 설정 중..."
+echo "7. settings.json 설정 중..."
 SETTINGS_FILE="$CLAUDE_DIR/settings.json"
 
 if [ ! -f "$SETTINGS_FILE" ]; then
