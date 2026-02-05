@@ -123,27 +123,103 @@ fi
 # 버짓 설정 파일 경로
 BUDGET_CONFIG="$HOME/.claude/budget-config.json"
 
-# ccusage로 이번 달 비용 가져오기 및 버짓 퍼센트 계산
+# 사용량 정보 가져오기
 BUDGET_INFO=""
-if command -v ccusage &> /dev/null; then
-    # 현재 년-월 가져오기
+USAGE_FILE=""
+if [ -f "$BUDGET_CONFIG" ]; then
+    USAGE_FILE=$(jq -r '.usage_file // ""' "$BUDGET_CONFIG")
+fi
+
+if [ -n "$USAGE_FILE" ] && [ "$USAGE_FILE" != "null" ] && [ -f "$USAGE_FILE" ]; then
+    # current_usage.json에서 사용량 읽기
+    USAGE_TOTAL=$(jq -r '.total // 0' "$USAGE_FILE" 2>/dev/null)
+    USAGE_SPEND=$(jq -r '.spend // 0' "$USAGE_FILE" 2>/dev/null)
+    USAGE_UPDATED=$(jq -r '.updated_at // ""' "$USAGE_FILE" 2>/dev/null)
+
+    if [ -n "$USAGE_TOTAL" ] && [ "$USAGE_TOTAL" != "null" ] && [ "$USAGE_TOTAL" != "0" ]; then
+        FORMATTED_SPEND=$(printf "%.2f" "$USAGE_SPEND")
+        FORMATTED_TOTAL=$(printf "%.2f" "$USAGE_TOTAL")
+
+        # 사용률 계산
+        USAGE_PERCENT=$(awk "BEGIN {
+            spent = $USAGE_SPEND;
+            total = $USAGE_TOTAL;
+            usage = spent / total * 100;
+            printf \"%.0f\", usage
+        }")
+
+        # 플랜 타입 확인
+        PLAN_TYPE=$(jq -r '.plan_type // "api"' "$BUDGET_CONFIG")
+
+        # 플랜 타입에 따라 색상 로직 분기
+        if [ "$PLAN_TYPE" = "api" ]; then
+            # API Billing: 남은 버짓 기준 (적게 쓸수록 초록)
+            if [ "$USAGE_PERCENT" -ge 100 ]; then
+                BUDGET_COLOR=$RED
+            elif [ "$USAGE_PERCENT" -ge 75 ]; then
+                BUDGET_COLOR=$YELLOW
+            else
+                BUDGET_COLOR=$GREEN
+            fi
+            BAR_PERCENT=$((100 - USAGE_PERCENT))
+            if [ $BAR_PERCENT -lt 0 ]; then BAR_PERCENT=0; fi
+        else
+            # Pro/Max 구독: 사용량 기준 (많이 쓸수록 초록 = 뽕뽑기)
+            if [ "$USAGE_PERCENT" -ge 100 ]; then
+                BUDGET_COLOR=$GREEN
+            elif [ "$USAGE_PERCENT" -ge 50 ]; then
+                BUDGET_COLOR=$YELLOW
+            else
+                BUDGET_COLOR=$RED
+            fi
+            BAR_PERCENT=$USAGE_PERCENT
+            if [ $BAR_PERCENT -gt 100 ]; then BAR_PERCENT=100; fi
+        fi
+
+        # 버짓 바 생성 (10칸)
+        BUDGET_BAR_LEN=10
+        BUDGET_FILLED=$((BAR_PERCENT * BUDGET_BAR_LEN / 100))
+        BUDGET_BAR="["
+        for ((i=0; i<$BUDGET_BAR_LEN; i++)); do
+            if [ $i -lt $BUDGET_FILLED ]; then
+                BUDGET_BAR+="█"
+            else
+                BUDGET_BAR+="░"
+            fi
+        done
+        BUDGET_BAR+="]"
+
+        # updated_at에서 시간 포맷팅 (ISO 8601 → 간략 표시)
+        UPDATED_SHORT=""
+        if [ -n "$USAGE_UPDATED" ] && [ "$USAGE_UPDATED" != "null" ]; then
+            # "2026-02-05T12:34:56.789Z" → "02/05 12:34"
+            UPDATED_SHORT=$(echo "$USAGE_UPDATED" | awk -F'[T.]' '{
+                split($1, d, "-");
+                split($2, t, ":");
+                printf "%s/%s %s:%s", d[2], d[3], t[1], t[2]
+            }' 2>/dev/null)
+            if [ -n "$UPDATED_SHORT" ]; then
+                UPDATED_SHORT=" (${UPDATED_SHORT})"
+            fi
+        fi
+
+        BUDGET_INFO=" | ${BUDGET_COLOR}💰 ${BUDGET_BAR} \$${FORMATTED_SPEND}/\$${FORMATTED_TOTAL}${UPDATED_SHORT}${RESET}"
+    fi
+elif command -v ccusage &> /dev/null; then
+    # fallback: ccusage로 이번 달 비용 가져오기
     CURRENT_MONTH=$(date +"%Y-%m")
 
-    # ccusage 실행하고 이번 달 비용 추출
     MONTHLY_COST=$(ccusage monthly -j 2>/dev/null | jq -r --arg month "$CURRENT_MONTH" '.monthly[] | select(.month == $month) | .totalCost // 0')
 
     if [ -n "$MONTHLY_COST" ] && [ "$MONTHLY_COST" != "null" ] && [ "$MONTHLY_COST" != "0" ]; then
         FORMATTED_COST=$(printf "%.2f" "$MONTHLY_COST")
 
-        # 버짓 설정이 있으면 퍼센트 바 표시
         if [ -f "$BUDGET_CONFIG" ]; then
             MONTHLY_BUDGET=$(jq -r '.monthly_budget // 0' "$BUDGET_CONFIG")
 
             if [ "$MONTHLY_BUDGET" != "0" ] && [ "$MONTHLY_BUDGET" != "null" ]; then
-                # 플랜 타입 확인
                 PLAN_TYPE=$(jq -r '.plan_type // "api"' "$BUDGET_CONFIG")
 
-                # 사용률 계산
                 USAGE_PERCENT=$(awk "BEGIN {
                     used = $MONTHLY_COST;
                     budget = $MONTHLY_BUDGET;
@@ -151,9 +227,7 @@ if command -v ccusage &> /dev/null; then
                     printf \"%.0f\", usage
                 }")
 
-                # 플랜 타입에 따라 색상 로직 분기
                 if [ "$PLAN_TYPE" = "api" ]; then
-                    # API Billing: 남은 버짓 기준 (적게 쓸수록 초록)
                     if [ "$USAGE_PERCENT" -ge 100 ]; then
                         BUDGET_COLOR=$RED
                     elif [ "$USAGE_PERCENT" -ge 75 ]; then
@@ -161,11 +235,9 @@ if command -v ccusage &> /dev/null; then
                     else
                         BUDGET_COLOR=$GREEN
                     fi
-                    # 바는 남은 버짓 표시
                     BAR_PERCENT=$((100 - USAGE_PERCENT))
                     if [ $BAR_PERCENT -lt 0 ]; then BAR_PERCENT=0; fi
                 else
-                    # Pro/Max 구독: 사용량 기준 (많이 쓸수록 초록 = 뽕뽑기)
                     if [ "$USAGE_PERCENT" -ge 100 ]; then
                         BUDGET_COLOR=$GREEN
                     elif [ "$USAGE_PERCENT" -ge 50 ]; then
@@ -173,12 +245,10 @@ if command -v ccusage &> /dev/null; then
                     else
                         BUDGET_COLOR=$RED
                     fi
-                    # 바는 사용량 표시
                     BAR_PERCENT=$USAGE_PERCENT
                     if [ $BAR_PERCENT -gt 100 ]; then BAR_PERCENT=100; fi
                 fi
 
-                # 버짓 바 생성 (10칸)
                 BUDGET_BAR_LEN=10
                 BUDGET_FILLED=$((BAR_PERCENT * BUDGET_BAR_LEN / 100))
                 BUDGET_BAR="["
