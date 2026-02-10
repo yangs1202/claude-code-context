@@ -152,8 +152,8 @@ if [ -n "$USAGE_FILE" ] && [ "$USAGE_FILE" != "null" ] && [ -f "$USAGE_FILE" ]; 
         PLAN_TYPE=$(jq -r '.plan_type // "api"' "$BUDGET_CONFIG")
 
         # 플랜 타입에 따라 색상 로직 분기
-        if [ "$PLAN_TYPE" = "api" ]; then
-            # API Billing: 남은 버짓 기준 (적게 쓸수록 초록)
+        if [ "$PLAN_TYPE" = "api" ] || [ "$PLAN_TYPE" = "manual" ]; then
+            # API Billing / 수동: 남은 버짓 기준 (적게 쓸수록 초록)
             if [ "$USAGE_PERCENT" -ge 100 ]; then
                 BUDGET_COLOR=$RED
             elif [ "$USAGE_PERCENT" -ge 75 ]; then
