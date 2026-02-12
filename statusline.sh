@@ -65,22 +65,34 @@ TOTAL_TOKENS=$((ACTUAL_INPUT + ACTUAL_OUTPUT))
 REMAINING=$((CONTEXT_SIZE - TOTAL_TOKENS))
 
 # 모델별 가격표 (USD per 1M tokens: input output)
-# 모델명 패턴 매칭으로 가격 결정
+# Anthropic 공식 가격 기준 - 구체적인 패턴을 먼저 매칭
 get_model_pricing() {
     local model="$1"
     case "$model" in
+        # Opus 4.5/4.6 ($5/$25)
+        *opus-4-5*|*opus-4-6*|*opus-4.5*|*opus-4.6*|*opus4.5*|*opus4.6*)
+            echo "5.00 25.00" ;;
+        # Opus 4/4.1 ($15/$75)
         *opus-4*|*opus4*)
             echo "15.00 75.00" ;;
-        *sonnet-4*|*sonnet4*)
-            echo "3.00 15.00" ;;
+        # Haiku 4.5 ($1/$5)
+        *haiku-4*|*haiku4*)
+            echo "1.00 5.00" ;;
+        # Claude 3.5 Haiku ($0.80/$4)
         *haiku-3.5*|*haiku-3-5*|*haiku3.5*)
             echo "0.80 4.00" ;;
-        *haiku*)
-            echo "0.80 4.00" ;;
-        *opus*)
-            echo "15.00 75.00" ;;
+        # Claude 3 Haiku ($0.25/$1.25)
+        *3-haiku*|*3haiku*)
+            echo "0.25 1.25" ;;
+        # Sonnet (전 버전 동일: $3/$15)
         *sonnet*)
             echo "3.00 15.00" ;;
+        # Opus fallback ($15/$75)
+        *opus*)
+            echo "15.00 75.00" ;;
+        # Haiku fallback ($1/$5)
+        *haiku*)
+            echo "1.00 5.00" ;;
         *)
             echo "" ;;
     esac
