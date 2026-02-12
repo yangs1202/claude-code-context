@@ -64,6 +64,49 @@ ACTUAL_OUTPUT=$((OUTPUT_TOKENS - BASELINE_OUTPUT))
 TOTAL_TOKENS=$((ACTUAL_INPUT + ACTUAL_OUTPUT))
 REMAINING=$((CONTEXT_SIZE - TOTAL_TOKENS))
 
+# 모델별 가격표 (USD per 1M tokens: input output)
+# 모델명 패턴 매칭으로 가격 결정
+get_model_pricing() {
+    local model="$1"
+    case "$model" in
+        *opus-4*|*opus4*)
+            echo "15.00 75.00" ;;
+        *sonnet-4*|*sonnet4*)
+            echo "3.00 15.00" ;;
+        *haiku-3.5*|*haiku-3-5*|*haiku3.5*)
+            echo "0.80 4.00" ;;
+        *haiku*)
+            echo "0.80 4.00" ;;
+        *opus*)
+            echo "15.00 75.00" ;;
+        *sonnet*)
+            echo "3.00 15.00" ;;
+        *)
+            echo "" ;;
+    esac
+}
+
+# 세션 비용 계산
+SESSION_COST=""
+if [ -n "$MODEL_NAME" ] && [ "$MODEL_NAME" != "null" ] && [[ "$MODEL_NAME" != *"{"* ]]; then
+    PRICING=$(get_model_pricing "$MODEL_NAME")
+    if [ -n "$PRICING" ]; then
+        INPUT_PRICE=$(echo "$PRICING" | awk '{print $1}')
+        OUTPUT_PRICE=$(echo "$PRICING" | awk '{print $2}')
+        SESSION_COST=$(awk "BEGIN {
+            input_cost = $ACTUAL_INPUT / 1000000 * $INPUT_PRICE;
+            output_cost = $ACTUAL_OUTPUT / 1000000 * $OUTPUT_PRICE;
+            total = input_cost + output_cost;
+            if (total < 0.01)
+                printf \"%.4f\", total;
+            else if (total < 1)
+                printf \"%.3f\", total;
+            else
+                printf \"%.2f\", total;
+        }")
+    fi
+fi
+
 # 음수 방지 (추가 안전장치)
 if [ $TOTAL_TOKENS -lt 0 ]; then
     TOTAL_TOKENS=0
@@ -282,5 +325,11 @@ if [ -n "$MODEL_NAME" ] && [ "$MODEL_NAME" != "null" ]; then
     fi
 fi
 
+# 세션 비용 정보 포맷팅
+SESSION_COST_INFO=""
+if [ -n "$SESSION_COST" ] && [ "$SESSION_COST" != "0.0000" ]; then
+    SESSION_COST_INFO=" | 💵 \$${SESSION_COST}"
+fi
+
 # 출력
-echo -e "${COLOR}Context: ${BAR} ${PERCENTAGE}%${COMPRESSED} | Remaining: ${REMAINING_K}K${RESET}${MODEL_INFO}${BUDGET_INFO}"
+echo -e "${COLOR}Context: ${BAR} ${PERCENTAGE}%${COMPRESSED} | Remaining: ${REMAINING_K}K${RESET}${MODEL_INFO}${SESSION_COST_INFO}${BUDGET_INFO}"
