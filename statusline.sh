@@ -189,15 +189,17 @@ if [ -n "$USAGE_FILE" ] && [ "$USAGE_FILE" != "null" ] && [ -f "$USAGE_FILE" ]; 
         done
         BUDGET_BAR+="]"
 
-        # updated_at에서 시간 포맷팅 (ISO 8601 → 간략 표시)
+        # updated_at에서 시간 포맷팅 (ISO 8601 UTC → 로컬 타임존 변환)
         UPDATED_SHORT=""
         if [ -n "$USAGE_UPDATED" ] && [ "$USAGE_UPDATED" != "null" ]; then
-            # "2026-02-05T12:34:56.789Z" → "02/05 12:34"
-            UPDATED_SHORT=$(echo "$USAGE_UPDATED" | awk -F'[T.]' '{
-                split($1, d, "-");
-                split($2, t, ":");
-                printf "%s/%s %s:%s", d[2], d[3], t[1], t[2]
-            }' 2>/dev/null)
+            # "2026-02-05T12:34:56.789Z" → 로컬 타임존으로 변환 → "02/05 21:34"
+            UPDATED_SHORT=$(date -d "$USAGE_UPDATED" +"%m/%d %H:%M" 2>/dev/null)
+            if [ -z "$UPDATED_SHORT" ]; then
+                # macOS의 경우 BSD date 사용
+                # ISO 8601에서 밀리초 제거: "2026-02-05T12:34:56.789Z" → "2026-02-05T12:34:56Z"
+                CLEANED_TS=$(echo "$USAGE_UPDATED" | sed 's/\.[0-9]*Z$/Z/')
+                UPDATED_SHORT=$(date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "$CLEANED_TS" +"%s" 2>/dev/null | xargs -I{} date -j -r {} +"%m/%d %H:%M" 2>/dev/null)
+            fi
             if [ -n "$UPDATED_SHORT" ]; then
                 UPDATED_SHORT=" (${UPDATED_SHORT})"
             fi
