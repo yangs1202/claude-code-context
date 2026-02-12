@@ -15,12 +15,21 @@ INPUT_TOKENS=$(echo "$input" | jq -r '.context_window.total_input_tokens // 0')
 OUTPUT_TOKENS=$(echo "$input" | jq -r '.context_window.total_output_tokens // 0')
 CONTEXT_SIZE=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
 
-# 현재 모델 추출 - settings.json에서 읽기
-MODEL_NAME=""
-CLAUDE_SETTINGS="$HOME/.claude/settings.json"
-if [ -f "$CLAUDE_SETTINGS" ]; then
-    MODEL_NAME=$(jq -r '.model // ""' "$CLAUDE_SETTINGS" 2>/dev/null)
+# 현재 모델 추출 - 입력 JSON에서 우선 읽기, fallback으로 settings.json
+MODEL_ID=$(echo "$input" | jq -r '.model.id // ""')
+MODEL_DISPLAY=$(echo "$input" | jq -r '.model.display_name // ""')
+MODEL_NAME="${MODEL_ID:-$MODEL_DISPLAY}"
+
+# 입력 JSON에 모델 정보가 없으면 settings.json에서 읽기
+if [ -z "$MODEL_NAME" ]; then
+    CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+    if [ -f "$CLAUDE_SETTINGS" ]; then
+        MODEL_NAME=$(jq -r '.model // ""' "$CLAUDE_SETTINGS" 2>/dev/null)
+    fi
 fi
+
+# 세션 비용 - 입력 JSON에서 직접 읽기 (Claude Code가 제공)
+API_COST=$(echo "$input" | jq -r '.cost.total_cost_usd // ""')
 
 # 이전 세션 정보 읽기
 if [ -f "$STATE_FILE" ]; then
@@ -98,9 +107,21 @@ get_model_pricing() {
     esac
 }
 
-# 세션 비용 계산
+# 세션 비용 계산 - API 제공 값 우선, fallback으로 수동 계산
 SESSION_COST=""
-if [ -n "$MODEL_NAME" ] && [ "$MODEL_NAME" != "null" ] && [[ "$MODEL_NAME" != *"{"* ]]; then
+if [ -n "$API_COST" ] && [ "$API_COST" != "null" ] && [ "$API_COST" != "0" ]; then
+    # Claude Code가 제공하는 실제 비용 사용
+    SESSION_COST=$(awk "BEGIN {
+        cost = $API_COST;
+        if (cost < 0.01)
+            printf \"%.4f\", cost;
+        else if (cost < 1)
+            printf \"%.3f\", cost;
+        else
+            printf \"%.2f\", cost;
+    }")
+elif [ -n "$MODEL_NAME" ] && [ "$MODEL_NAME" != "null" ] && [[ "$MODEL_NAME" != *"{"* ]]; then
+    # fallback: 모델별 가격표로 수동 계산
     PRICING=$(get_model_pricing "$MODEL_NAME")
     if [ -n "$PRICING" ]; then
         INPUT_PRICE=$(echo "$PRICING" | awk '{print $1}')
@@ -328,12 +349,12 @@ elif command -v ccusage &> /dev/null; then
     fi
 fi
 
-# 모델 정보 포맷팅 - JSON 문자열이 아닌 경우에만 표시
+# 모델 정보 포맷팅 - display_name 우선, fallback으로 model id
+MODEL_LABEL="${MODEL_DISPLAY:-$MODEL_NAME}"
 MODEL_INFO=""
-if [ -n "$MODEL_NAME" ] && [ "$MODEL_NAME" != "null" ]; then
-    # JSON 형식인지 확인 ('{' 포함 여부)
-    if [[ "$MODEL_NAME" != *"{"* ]]; then
-        MODEL_INFO=" | 🤖 $MODEL_NAME"
+if [ -n "$MODEL_LABEL" ] && [ "$MODEL_LABEL" != "null" ]; then
+    if [[ "$MODEL_LABEL" != *"{"* ]]; then
+        MODEL_INFO=" | 🏷 $MODEL_LABEL"
     fi
 fi
 
